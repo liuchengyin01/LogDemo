@@ -74,10 +74,10 @@ public class OperationLogAspect {
      *    无法获取到Body，如果通过流的方式获取Body，会出现 getInputStream() has already been called for this request 异常
      * 2、异常原因：@RequestBody这个注解是以流的形式读取请求，它调用过一次了。（getInputStream()和getReader()只能调用一次）
      *    解决办法：暂不清楚
-     * 3、解决方案：可以通过request.getParameterMap()获取，但只能获取到query参数，无法获取到body参数
+     * 3、获参解决方案：可以通过request.getParameterMap()获取，但只能获取到query参数，无法获取到body参数
      *    可以考虑通过request.getParameterMap()来判断是否为空，为空，则可能是传的body参数
-     *      问题：(@RequestBody User user, String name, Integer age)  无法解决，没办法通过判空来解决
-     * 4、最终解决方案：同意采用joinPoint.getArgs()来获取参数
+     *       问题：(@RequestBody User user, String name, Integer age)  无法解决，没办法通过判空来解决
+     * 4、最终解决方案：统一采用joinPoint.getArgs()来获取参数
      */
 
 
