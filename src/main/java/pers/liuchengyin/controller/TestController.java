@@ -52,4 +52,11 @@ public class TestController {
     public Response<String> delete(@RequestParam("id") Long id){
         return new Response<String>(true,"删除成功","delete_ok");
     }
+
+    @OperateLog(operateModule = "异常模块", operateType = "GET", operateDesc = "异常处理")
+    @GetMapping("/exception")
+    public Response<String> exception(){
+        int num = 10 / 0;
+        return new Response<String>(true,"没有异常","OK");
+    }
 }
