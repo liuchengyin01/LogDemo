@@ -53,7 +53,7 @@ OperationLog(
 )
 ```
 
-#### 异常测试(POST)：http://localhost:8080/test/add
+#### 异常测试(GET)：http://localhost:8080/test/exception
 #### 参数：无
 #### 结果
 ```java
