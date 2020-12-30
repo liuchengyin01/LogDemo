@@ -1,6 +1,7 @@
 package pers.liuchengyin.aspect;
 
 import com.alibaba.fastjson.JSON;
+import com.sun.org.apache.regexp.internal.RE;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.AfterReturning;
@@ -8,12 +9,16 @@ import org.aspectj.lang.annotation.AfterThrowing;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
-import pers.liuchengyin.log.ExceptionLog;
+import pers.liuchengyin.log.logPojo.BaseLog;
+import pers.liuchengyin.log.logPojo.ExceptionLog;
 import pers.liuchengyin.log.OperateLog;
-import pers.liuchengyin.log.OperationLog;
+import pers.liuchengyin.log.logPojo.OperationLog;
+import pers.liuchengyin.service.ExceptionLogService;
+import pers.liuchengyin.service.OperationLogService;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
@@ -49,6 +54,10 @@ public class OperationLogAspect {
     private static final String WL_IP = "WL-Proxy-Client-IP";
     private static final Integer IP_LENGTH = 15;
 
+    @Autowired
+    private OperationLogService operationLogService;
+    @Autowired
+    private ExceptionLogService exceptionLogService;
 
     /**
      * 设置操作日志切入点记录操作日志
@@ -61,9 +70,10 @@ public class OperationLogAspect {
 
     /**
      * 设置操作异常切入点记录异常日志
-     * 扫描所有controller包下操作
+     * 扫描所有controller结尾的操作
+     * 根据需要修改，一般只需要修改前缀即可，比如你是com.开头的包，将pers改成com即可
      */
-    @Pointcut(value = "execution(* pers.liuchengyin.controller.*.*(..))")
+    @Pointcut(value = "execution(* pers..*Controller.*.*(..))")
     public void operateExcLogPointCut() {
 
     }
@@ -88,82 +98,13 @@ public class OperationLogAspect {
      */
     @AfterReturning(value = "operateLogPointCut()", returning = "keys")
     public void saveOperationLog(JoinPoint joinPoint, Object keys) {
-        // 获取RequestAttributes
-        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
-        // 从获取RequestAttributes中获取HttpServletRequest的信息
-        HttpServletRequest request = (HttpServletRequest) requestAttributes.resolveReference(RequestAttributes.REFERENCE_REQUEST);
-        // 获取Session信息 - 如果你需要的话
-        HttpSession session = (HttpSession) requestAttributes.resolveReference(RequestAttributes.REFERENCE_SESSION);
-        // 创建一个Log对象
         OperationLog operationLog = new OperationLog();
         try {
-            // TODO: 分布式ID，自增ID则可以不设置
-            operationLog.setOperateId(1L);
-            // 从切面织入点通过反射机制获取织入点的方法
-            MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-            // 获取切入点所在的方法对象
-            Method method = signature.getMethod();
-            // 获取请求的类名
-            String className = joinPoint.getTarget().getClass().getName();
-            // 获取请求的方法名
-            String methodName = method.getName();
-            // 拼接类名和方法名 - pers.liuchengyin.controller.xxxController
-            methodName = className + "." + methodName;
-            operationLog.setOperateMethod(methodName);
-            // 获取参数名
-            String[] parameterNames = ((MethodSignature) joinPoint.getSignature()).getParameterNames();
-            // 参数的JSON字符串
-            String params = "";
-            if(null != parameterNames && parameterNames.length != 0){
-                // 获取参数
-                Object[] args = joinPoint.getArgs();
-                // 将 <参数名, 参数> 打入map -
-                HashMap<String, Object> map = new HashMap<>();
-                for (int i = 0; i < parameterNames.length; i++){
-                    map.put(parameterNames[i],args[i]);
-                }
-                // 使用FastJson将其转换为字符串
-                params = JSON.toJSONString(map);
-            }
-            // 获取请求头参数
-            Enumeration<String> headerNames = request.getHeaderNames();
-            // 请求头的JSON字符串
-            String headerParams = "";
-            if(null != headerNames){
-                HashMap<String, String> headMap = new HashMap<>(7);
-                while(headerNames.hasMoreElements()){
-                    String key = headerNames.nextElement();
-                    String value = request.getHeader(key);
-                    headMap.put(key,value);
-                }
-                // 使用FastJson将其转换为字符串
-                headerParams = JSON.toJSONString(headMap);
-            }
-            // 获取操作信息 - 就是获取@OperateLog里面信息
-            OperateLog opLog = method.getAnnotation(OperateLog.class);
-            if (null != opLog) {
-                // 操作模块 - 如（订单模块）
-                operationLog.setOperateModule(opLog.operateModule());
-                // 请求类型 - 如（POST）
-                operationLog.setOperateType(opLog.operateType());
-                // 操作描述 - 如（新增订单）
-                operationLog.setOperateDesc(opLog.operateDesc());
-            }
-            operationLog.setOperateRequestParam(params);
-            operationLog.setOperateHeaderParam(headerParams);
+            setBaseLog(joinPoint, operationLog);
             operationLog.setOperateResponseParam(JSON.toJSONString(keys));
-            // TODO: 参数设置 - 根据自己的需求添加即可
-            // 请求用户ID
-            operationLog.setOperateUserId(1L);
-            // 请求用户名称
-            operationLog.setOperateUserName("liuchengyin");
-            // 请求IP
-            operationLog.setOperateIp(getIpAddr(request));
-            // 请求URI
-            operationLog.setOperateUri(request.getRequestURI());
-            // 创建时间
-            operationLog.setCreateTime(new Date());
-            // TODO: 插入数据库
+            // 插入数据库
+            operationLogService.recordOperateLog(operationLog);
+            // 打印信息，请删除，做测试使用，请使用log.info做日志
             System.out.println(operationLog);
         } catch (Exception e) {
             e.printStackTrace();
@@ -173,74 +114,76 @@ public class OperationLogAspect {
 
     @AfterThrowing(pointcut = "operateExcLogPointCut()", throwing = "e")
     public void saveExceptionLog(JoinPoint joinPoint, Throwable e) {
-        // 获取RequestAttributes
-        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
-        // 从获取RequestAttributes中获取HttpServletRequest的信息
-        HttpServletRequest request = (HttpServletRequest) requestAttributes.resolveReference(RequestAttributes.REFERENCE_REQUEST);
-        // 获取Session信息 - 如果你需要的话
-        HttpSession session = (HttpSession) requestAttributes.resolveReference(RequestAttributes.REFERENCE_SESSION);
         ExceptionLog exceptionLog = new ExceptionLog();
         try {
-            // TODO: 分布式ID，自增ID则可以不设置
-            exceptionLog.setExcId(1L);
-            // 从切面织入点处通过反射机制获取织入点处的方法
-            MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-            // 获取切入点所在的方法
-            Method method = signature.getMethod();
-            // 获取请求的类名
-            String className = joinPoint.getTarget().getClass().getName();
-            // 获取请求的方法名
-            String methodName = method.getName();
-            // 拼接类名和方法名 - pers.liuchengyin.controller.xxxController
-            methodName = className + "." + methodName;
-            exceptionLog.setOperateMethod(methodName);
-            // 获取参数名
-            String[] parameterNames = ((MethodSignature) joinPoint.getSignature()).getParameterNames();
-            // 参数的JSON字符串
-            String params = "";
-            if(null != parameterNames && parameterNames.length != 0){
-                // 获取参数
-                Object[] args = joinPoint.getArgs();
-                // 将 <参数名, 参数> 打入map -
-                HashMap<String, Object> map = new HashMap<>();
-                for (int i = 0; i < parameterNames.length; i++){
-                    map.put(parameterNames[i],args[i]);
-                }
-                // 使用FastJson将其转换为字符串
-                params = JSON.toJSONString(map);
-            }
-            // 获取请求头参数
-            Enumeration<String> headerNames = request.getHeaderNames();
-            // 请求头的JSON字符串
-            String headerParam = "";
-            if(null != headerNames){
-                HashMap<String, String> headMap = new HashMap<>(7);
-                while(headerNames.hasMoreElements()){
-                    String key = headerNames.nextElement();
-                    String value = request.getHeader(key);
-                    headMap.put(key,value);
-                }
-                // 使用FastJson将其转换为字符串
-                headerParam = JSON.toJSONString(headMap);
-            }
-            exceptionLog.setExcRequestParam(params);
-            exceptionLog.setOperateHeaderParam(headerParam);
-            exceptionLog.setOperateMethod(methodName);
+            setBaseLog(joinPoint, exceptionLog);
             exceptionLog.setExcName(e.getClass().getName());
             exceptionLog.setExcMessage(stackTraceToString(e.getClass().getName(), e.getMessage(), e.getStackTrace()));
-            // TODO: 参数设置 - 根据自己的需求添加即可
-            exceptionLog.setOperateUserId(1L);
-            exceptionLog.setOperateUserName("liuchengyin");
-            exceptionLog.setOperateUri(request.getRequestURI());
-            exceptionLog.setOperateIp(getIpAddr(request));
-            exceptionLog.setCreateTime(new Date());
-            // TODO： 插入数据库
+            // 插入数据库
+            exceptionLogService.recordExceptionLog(exceptionLog);
+            // 打印信息，请删除，做测试使用，请使用log.info做日志
             System.out.println(exceptionLog);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 
+
+    /**
+     * 设置基础的参数
+     * @param joinPoint 切入点
+     * @param baseLog 基础日志
+     */
+    private void setBaseLog(JoinPoint joinPoint, BaseLog baseLog) {
+        // 获取RequestAttributes
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        // 从获取RequestAttributes中获取HttpServletRequest的信息
+        HttpServletRequest request = (HttpServletRequest) requestAttributes.resolveReference(RequestAttributes.REFERENCE_REQUEST);
+        // 获取Session信息 - 如果你需要的话
+//        HttpSession session = (HttpSession) requestAttributes.resolveReference(RequestAttributes.REFERENCE_SESSION);
+        baseLog.setId(1L);
+        // 从切面织入点通过反射机制获取织入点的方法
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        // 获取切入点所在的方法对象
+        Method method = signature.getMethod();
+        setOpLog(method, baseLog);
+        String methodName = getMethodName(joinPoint, method);
+        String params = getParams(joinPoint);
+        String headerParams = getHeaders(request);
+        baseLog.setOperateMethod(methodName);
+        baseLog.setRequestParam(params);
+        baseLog.setHeaderParam(headerParams);
+        // TODO: 参数设置 - 根据自己的需求添加即可
+        // 比如请求用户的信息，可以通过一个工具类获取，从ThreadLocal里拿出来
+        // 请求用户ID
+        baseLog.setOperateUserId(1L);
+        // 请求用户名称
+        baseLog.setOperateUserName("liuchengyin");
+        // 请求IP
+        baseLog.setOperateIp(getIpAddr(request));
+        // 请求URI
+        baseLog.setOperateUri(request.getRequestURI());
+        // 创建时间
+        baseLog.setCreateTime(new Date());
+    }
+
+    /**
+     * 设置@OperateLog注解的参数
+     * @param method 方法
+     * @param baseLog 日志
+     */
+    private void setOpLog(Method method, BaseLog baseLog){
+        // 获取操作信息 - 就是获取@OperateLog里面信息
+        OperateLog opLog = method.getAnnotation(OperateLog.class);
+        if (null != opLog) {
+            // 操作模块 - 如（订单模块）
+            baseLog.setOperateModule(opLog.operateModule());
+            // 请求类型 - 如（POST）
+            baseLog.setOperateType(opLog.operateType());
+            // 操作描述 - 如（新增订单）
+            baseLog.setOperateDesc(opLog.operateDesc());
+        }
+    }
 
     /**
      * 转换异常信息为字符串
@@ -256,6 +199,45 @@ public class OperationLogAspect {
         return exceptionName + ":" + exceptionMessage + "\n\t" + strBuff.toString();
     }
 
+    /**
+     * 获取方法名
+     * @param joinPoint 切入点
+     * @param method 方法对象
+     * @return 方法名
+     */
+    private String getMethodName(JoinPoint joinPoint, Method method){
+        // 获取请求的类名
+        String className = joinPoint.getTarget().getClass().getName();
+        // 获取请求的方法名
+        String methodName = method.getName();
+        // 拼接类名和方法名 - pers.liuchengyin.controller.xxxController
+        methodName = className + "." + methodName;
+        return methodName;
+    }
+
+    /**
+     * 获取方法请求参数
+     * @param joinPoint 切入点
+     * @return 参数JSON字符串
+     */
+    private String getParams(JoinPoint joinPoint){
+        // 获取参数名
+        String[] parameterNames = ((MethodSignature) joinPoint.getSignature()).getParameterNames();
+        // 参数的JSON字符串
+        String params = "";
+        if(null != parameterNames && parameterNames.length != 0){
+            // 获取参数
+            Object[] args = joinPoint.getArgs();
+            // 将 <参数名, 参数> 打入map
+            HashMap<String, Object> map = new HashMap<>();
+            for (int i = 0; i < parameterNames.length; i++){
+                map.put(parameterNames[i],args[i]);
+            }
+            // 使用FastJson将其转换为字符串
+            params = JSON.toJSONString(map);
+        }
+        return params;
+    }
 
     /**
      * 获取Headers，并将其转换成JSON字符串
@@ -263,16 +245,22 @@ public class OperationLogAspect {
      * @return headers的JSON字符串
      */
     private String getHeaders(HttpServletRequest request) {
-        Map<String, String> headers = new HashMap<>(16);
+        // 获取请求头参数
         Enumeration<String> headerNames = request.getHeaderNames();
-        while (headerNames.hasMoreElements()) {
-            String key = headerNames.nextElement();
-            String value = request.getHeader(key);
-            headers.put(key, value);
+        // 请求头的JSON字符串
+        String headerParams = "";
+        if(null != headerNames){
+            HashMap<String, String> headMap = new HashMap<>(7);
+            while(headerNames.hasMoreElements()){
+                String key = headerNames.nextElement();
+                String value = request.getHeader(key);
+                headMap.put(key,value);
+            }
+            // 使用FastJson将其转换为字符串
+            headerParams = JSON.toJSONString(headMap);
         }
-        return JSON.toJSONString(headers);
+        return headerParams;
     }
-
 
     /**
      * 获取IP地址
@@ -311,4 +299,6 @@ public class OperationLogAspect {
         }
         return ip;
     }
+
+
 }

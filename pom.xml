@@ -8,11 +8,9 @@
         <version>2.4.1</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>pers.liuchengyin</groupId>
-    <artifactId>logdemo</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>logdemo</name>
-    <description>SpringBoot For LogDemo</description>
+    <groupId>pers.liuchengyin.log</groupId>
+    <artifactId>log-api</artifactId>
+    <version>1.0.0</version>
 
     <properties>
         <java.version>1.8</java.version>
@@ -43,22 +41,4 @@
             <version>1.2.46</version>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
 </project>

@@ -1,4 +1,4 @@
-package pers.liuchengyin.log;
+package pers.liuchengyin.log.logPojo;
 
 import lombok.Data;
 import lombok.ToString;
@@ -6,26 +6,22 @@ import lombok.ToString;
 import java.util.Date;
 
 /**
- * @ClassName ExceptionLog
- * @Description 异常日志类
+ * @ClassName BaseLog
+ * @Description 公共Log
  * @Author 柳成荫
- * @Date 2020/12/28
+ * @Date 2020/12/29
  */
 @Data
 @ToString
-public class ExceptionLog {
+public class BaseLog {
     /** 分布式id(自增id) */
-    private Long excId;
+    private Long id;
     /** 请求参数 */
-    private String excRequestParam;
+    private String requestParam;
     /** 请求头参数 */
-    private String operateHeaderParam;
+    private String headerParam;
     /** 请求方法名 */
     private String operateMethod;
-    /** 异常名 */
-    private String excName;
-    /** 异常信息 */
-    private String excMessage;
     /** 操作用户ID */
     private Long operateUserId;
     /** 操作用户名 */
@@ -34,6 +30,12 @@ public class ExceptionLog {
     private String operateUri;
     /** 请求IP */
     private String operateIp;
-    /** 发生异常时间(创建时间) */
+    /** 操作模块 */
+    private String operateModule;
+    /** 请求类型(GET/POST/PUT/DELETE) */
+    private String operateType;
+    /** 操作描述 */
+    private String operateDesc;
+    /** 创建时间 */
     private Date createTime;
 }
